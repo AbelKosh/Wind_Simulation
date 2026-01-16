@@ -1,0 +1,44 @@
+# Wind Simulation - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# =============================================================================
+# Core Dependencies
+# =============================================================================
+python-dotenv>=1.0.0        # Environment variable management
+pydantic>=2.0.0             # Data validation and settings
+pydantic-settings>=2.0.0    # Pydantic settings management
+requests>=2.31.0            # HTTP client for API calls
+
+# =============================================================================
+# Data Processing
+# =============================================================================
+pandas>=2.0.0               # Data manipulation and analysis
+numpy>=1.24.0               # Numerical computing
+
+# =============================================================================
+# Visualization
+# =============================================================================
+matplotlib>=3.7.0           # Static plotting
+folium>=0.14.0              # Interactive map visualizations
+cartopy>=0.21.0             # Map projections and basemaps
+geopandas>=0.14.0           # Geographic data handling (shapefiles)
+shapely>=2.0.0              # Geometric operations
+
+# =============================================================================
+# Data Interpolation
+# =============================================================================
+scipy>=1.11.0               # Smoothing and interpolation
+
+# =============================================================================
+# Caching
+# =============================================================================
+requests-cache>=1.1.0       # HTTP request caching
+
+# =============================================================================
+# Development & Testing (optional)
+# =============================================================================
+pytest>=7.0.0               # Testing framework
+pytest-cov>=4.0.0           # Coverage reporting
+black>=23.0.0               # Code formatting
+flake8>=6.0.0               # Linting
+isort>=5.12.0               # Import sorting
