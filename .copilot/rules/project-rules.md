@@ -78,7 +78,7 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 
 ### 3.1 Core Features (Implemented)
 - **Command-Line Interface**: Full argparse CLI for scripted usage (`python -m src.cli`)
-- **Geographic Grid Fetching**: Fetch wind data across a grid of lat/lon coordinates (up to 0.05° resolution)
+- **Geographic Grid Fetching**: Fetch wind data across a grid of lat/lon coordinates (up to 0.01° resolution, though 0.025° is recommended for performance)
 - **Severe Weather Integration**: Local Storm Reports (LSR) API for tornado and thunderstorm wind data
 - **Storm Wind Augmentation**: Combine grid and storm wind data using "max wins" logic (highest value preserved, never summed)
 - **Tornado Wind Estimation**: EF rating to wind speed mapping (EF0: 75 mph, EF1: 98 mph, etc.)
@@ -86,12 +86,28 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 - **Interactive Heatmap (HTML)**: Folium-based zoomable/pannable map with storm report overlays
 - **Smoothed Visualization**: Bicubic interpolation for smooth gradient heatmaps
 - **Semi-Transparent Overlay**: Configurable alpha for heatmap over basemap
-- **TIGER Shapefiles**: Accurate state boundaries from Census Bureau data
+- **TIGER Shapefiles**: Accurate state boundaries from Census Bureau data (loaded via geopandas)
 - **CSV Export**: Export coordinates and peak wind speeds for external analysis
 - **Demo Mode**: Test the application without an API key using synthetic data (includes Jan 8-9, 2024 NC storm event)
 - **Smart Caching**: File-based caching to minimize API calls
 
-### 3.2 Out of Scope
+### 3.2 CLI Flags Reference
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--start-date` | Yesterday | Start date for wind data (YYYY-MM-DD) |
+| `--end-date` | Today | End date for wind data (YYYY-MM-DD) |
+| `--region` | nc | Preset region (nc, nc_coast, etc.) |
+| `--resolution` | 0.05 | Grid resolution in degrees |
+| `--format` | all | Output format (png, html, csv, all) |
+| `--demo` | False | Use synthetic demo data |
+| `--verbose` | False | Enable debug logging |
+| `--show-storm-markers` | False | Display storm markers and tornado paths on map |
+| `--no-augment-storm-winds` | False | Disable storm wind augmentation (only use grid data) |
+| `--no-max-marker` | False | Hide the star marker at peak wind location |
+| `--smoothing` | 4 | Interpolation upsampling factor |
+| `--alpha` | 0.5 | Heatmap transparency |
+
+### 3.3 Out of Scope
 - Time series plots
 - Wind rose diagrams
 - Statistical summaries
@@ -99,7 +115,7 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 - Real-time streaming data
 - Predictive modeling
 
-### 3.3 Visualization Rules
+### 3.4 Visualization Rules
 - **Single Visualization Type**: Geographic map-based heatmap only
 - **Cartopy Basemaps**: Use Cartopy for map projections with land/ocean/river features
 - **TIGER Boundaries**: Use Census Bureau TIGER shapefiles for accurate state outlines
@@ -111,7 +127,7 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 - **Storm Report Overlays**: Tornado paths colored by EF rating, storm markers by event type
 - **Max-Wins Data Fusion**: When combining grid and storm data, keep only the highest wind value per location (never sum)
 
-### 3.4 Severe Weather Data Rules
+### 3.5 Severe Weather Data Rules
 - **Local Storm Reports (LSR)**: Fetch from Weather Company Severe Weather API
 - **Supported Event Types**: tornado, thunderstorm_wind, hail, high_wind, flash_flood, wildfire
 - **EF Rating Wind Mapping**: EF0=75mph, EF1=98mph, EF2=123mph, EF3=150mph, EF4=183mph, EF5=220mph

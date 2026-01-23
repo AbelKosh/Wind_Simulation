@@ -707,6 +707,7 @@ def plot_geo_heatmap_static(
     show_tornado_paths: bool = True,
     show_wind_reports: bool = True,
     augment_with_storm_winds: bool = True,
+    show_storm_markers: bool = True,
 ) -> plt.Figure:
     """
     Create a static geographic heatmap of wind speeds using Cartopy.
@@ -727,6 +728,7 @@ def plot_geo_heatmap_static(
         show_tornado_paths: Whether to draw tornado path polygons
         show_wind_reports: Whether to show wind event markers
         augment_with_storm_winds: Whether to incorporate storm wind data into heatmap
+        show_storm_markers: Whether to display storm report markers on the map
         
     Returns:
         Matplotlib Figure object
@@ -917,8 +919,8 @@ def plot_geo_heatmap_static(
             zorder=10
         )
         
-        # Overlay storm reports if provided
-        if storm_data and storm_data.count > 0:
+        # Overlay storm reports if provided and markers are enabled
+        if storm_data and storm_data.count > 0 and show_storm_markers:
             import cartopy.crs as ccrs
             plotted_types = overlay_storm_reports(
                 ax, storm_data,
@@ -975,6 +977,7 @@ def plot_geo_heatmap_interactive(
     show_tornado_paths: bool = True,
     show_wind_reports: bool = True,
     augment_with_storm_winds: bool = True,
+    show_storm_markers: bool = True,
 ) -> 'folium.Map':
     """
     Create an interactive geographic heatmap using Folium.
@@ -988,6 +991,7 @@ def plot_geo_heatmap_interactive(
         show_tornado_paths: Whether to draw tornado path polygons
         show_wind_reports: Whether to show wind event markers
         augment_with_storm_winds: Whether to incorporate storm wind data into heatmap
+        show_storm_markers: Whether to display storm report markers on the map
         
     Returns:
         Folium Map object
@@ -1154,8 +1158,8 @@ def plot_geo_heatmap_interactive(
     '''
     m.get_root().html.add_child(folium.Element(legend_html))
     
-    # Add storm overlays if provided
-    if storm_data and storm_data.count > 0:
+    # Add storm overlays if provided and markers are enabled
+    if storm_data and storm_data.count > 0 and show_storm_markers:
         overlay_storm_reports_folium(
             m, storm_data,
             show_tornado_paths=show_tornado_paths,

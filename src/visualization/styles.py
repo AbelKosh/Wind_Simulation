@@ -9,8 +9,7 @@ publication-quality output.
 """
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple
 
 # =============================================================================
 # Figure Sizes
@@ -149,88 +148,6 @@ def style_context():
             # ... plotting code
     """
     return plt.rc_context(get_plot_style())
-
-
-# =============================================================================
-# Color Utilities
-# =============================================================================
-
-def get_wind_color(speed: float, max_speed: float = 75.0) -> str:
-    """
-    Get color for wind speed value.
-    
-    Args:
-        speed: Wind speed in mph
-        max_speed: Maximum expected speed (for normalization)
-        
-    Returns:
-        Hex color string
-    """
-    # Define thresholds
-    thresholds = [
-        (5, "calm"),
-        (15, "light"),
-        (25, "moderate"),
-        (35, "fresh"),
-        (45, "strong"),
-        (55, "gale"),
-        (65, "storm"),
-        (75, "violent"),
-    ]
-    
-    for threshold, category in thresholds:
-        if speed <= threshold:
-            return WIND_SPEED_COLORS[category]
-    
-    return WIND_SPEED_COLORS["hurricane"]
-
-
-def create_wind_colormap(
-    vmin: float = 0,
-    vmax: float = 75,
-    n_colors: int = 256
-) -> mcolors.LinearSegmentedColormap:
-    """
-    Create a custom colormap for wind speeds.
-    
-    Args:
-        vmin: Minimum wind speed
-        vmax: Maximum wind speed
-        n_colors: Number of colors in colormap
-        
-    Returns:
-        Matplotlib colormap
-    """
-    colors = list(WIND_SPEED_COLORS.values())
-    return mcolors.LinearSegmentedColormap.from_list(
-        "wind_speed", colors, N=n_colors
-    )
-
-
-def get_wind_speed_cmap():
-    """Get the default wind speed colormap."""
-    return plt.get_cmap(WIND_COLORMAP)
-
-
-# =============================================================================
-# Annotation Helpers
-# =============================================================================
-
-def format_wind_speed(speed: float, unit: str = "mph", decimals: int = 1) -> str:
-    """Format wind speed with unit."""
-    if speed is None:
-        return "N/A"
-    return f"{speed:.{decimals}f} {unit}"
-
-
-def format_direction(degrees: float) -> str:
-    """Format wind direction as cardinal."""
-    directions = [
-        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
-    ]
-    index = round(degrees / 22.5) % 16
-    return f"{directions[index]} ({degrees:.0f}°)"
 
 
 # =============================================================================

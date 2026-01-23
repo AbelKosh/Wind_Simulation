@@ -194,10 +194,16 @@ Examples:
         help='Disable severe weather overlay'
     )
     severe_group.add_argument(
+        '--show-storm-markers',
+        action='store_true',
+        default=False,
+        help='Show storm markers and tornado paths on heatmap (default: disabled)'
+    )
+    severe_group.add_argument(
         '--tornado-paths',
         action='store_true',
         default=True,
-        help='Show tornado path polygons (default: enabled)'
+        help='Show tornado path polygons when --show-storm-markers is enabled (default: enabled)'
     )
     severe_group.add_argument(
         '--no-tornado-paths',
@@ -221,6 +227,11 @@ Examples:
         default=None,
         help='Comma-separated list of event types to show (tornado,thunderstorm_wind,hail,high_wind). Default: all'
     )
+    severe_group.add_argument(
+        '--no-max-marker',
+        action='store_true',
+        help='Hide the star marker showing maximum wind speed location on PNG output'
+    )
     
     return parser
 
@@ -237,9 +248,11 @@ def run_heatmap(
     smoothing_factor: int = 4,
     alpha: float = 0.5,
     include_severe_weather: bool = True,
+    show_storm_markers: bool = False,
     show_tornado_paths: bool = True,
     event_types: Optional[list] = None,
     augment_with_storm_winds: bool = True,
+    show_max_marker: bool = True,
 ) -> dict:
     """
     Generate wind speed heatmap(s) for the specified parameters.
@@ -256,9 +269,11 @@ def run_heatmap(
         smoothing_factor: Interpolation upsampling factor
         alpha: Heatmap transparency
         include_severe_weather: Whether to fetch and overlay Local Storm Reports
-        show_tornado_paths: Whether to draw tornado path polygons
+        show_storm_markers: Whether to show storm markers and tornado paths on heatmap
+        show_tornado_paths: Whether to draw tornado path polygons (when show_storm_markers is True)
         event_types: List of event types to include (None = all)
         augment_with_storm_winds: Whether to incorporate storm wind data into heatmap
+        show_max_marker: Whether to show star marker at max wind location
         
     Returns:
         Dictionary with paths to generated files
@@ -326,10 +341,12 @@ def run_heatmap(
             dpi=150,
             smoothing_factor=smoothing_factor,
             alpha=alpha,
-            storm_data=storm_data,
+            storm_data=storm_data if augment_with_storm_winds else None,
             show_tornado_paths=show_tornado_paths,
             show_wind_reports=True,
             augment_with_storm_winds=augment_with_storm_winds,
+            show_storm_markers=show_storm_markers,
+            show_max_marker=show_max_marker,
         )
         results['png'] = png_path
         logger.info(f"  Saved: {png_path}")
@@ -340,10 +357,11 @@ def run_heatmap(
             grid_data,
             output_path=output_dir / f"{base_name}_heatmap.html",
             title=f"{region_name} Wind Speed",
-            storm_data=storm_data,
+            storm_data=storm_data if augment_with_storm_winds else None,
             show_tornado_paths=show_tornado_paths,
             show_wind_reports=True,
             augment_with_storm_winds=augment_with_storm_winds,
+            show_storm_markers=show_storm_markers,
         )
         results['html'] = html_path
         logger.info(f"  Saved: {html_path}")
@@ -422,9 +440,11 @@ def main(argv: Optional[list] = None) -> int:
     
     # Determine severe weather settings
     include_severe_weather = args.severe_weather and not args.no_severe_weather
+    show_storm_markers = args.show_storm_markers
     show_tornado_paths = args.tornado_paths and not args.no_tornado_paths
     augment_storm_winds = args.augment_storm_winds and not args.no_augment_storm_winds
     event_types = args.event_types.split(',') if args.event_types else None
+    show_max_marker = not args.no_max_marker
     
     # Print configuration
     print("=" * 70)
@@ -440,7 +460,9 @@ def main(argv: Optional[list] = None) -> int:
     print(f"Mode: {'Demo' if demo_mode else 'API'}")
     print(f"Severe Weather Overlay: {'Enabled' if include_severe_weather else 'Disabled'}")
     if include_severe_weather:
-        print(f"  Tornado Paths: {'Enabled' if show_tornado_paths else 'Disabled'}")
+        print(f"  Show Storm Markers: {'Enabled' if show_storm_markers else 'Disabled'}")
+        if show_storm_markers:
+            print(f"    Tornado Paths: {'Enabled' if show_tornado_paths else 'Disabled'}")
         print(f"  Storm Wind Augmentation: {'Enabled' if augment_storm_winds else 'Disabled'}")
         if event_types:
             print(f"  Event Types: {', '.join(event_types)}")
@@ -459,9 +481,11 @@ def main(argv: Optional[list] = None) -> int:
             smoothing_factor=args.smoothing,
             alpha=args.alpha,
             include_severe_weather=include_severe_weather,
+            show_storm_markers=show_storm_markers,
             show_tornado_paths=show_tornado_paths,
             event_types=event_types,
             augment_with_storm_winds=augment_storm_winds,
+            show_max_marker=show_max_marker,
         )
         
         print("\n" + "=" * 70)

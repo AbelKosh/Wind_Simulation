@@ -15,7 +15,7 @@ A Python application for fetching historical wind data from the Weather Company 
 - **Interactive HTML Maps**: Zoomable, pannable Folium-based maps with storm report popups
 - **CSV Data Export**: Export coordinates and wind speeds for external analysis tools
 - **Command-Line Interface**: Full CLI for scripted/automated usage
-- **Grid-Based Fetching**: Collect data across configurable geographic grids (up to 0.05° resolution)
+- **Grid-Based Fetching**: Collect data across configurable geographic grids (0.01° to 0.25° resolution; 0.025° recommended for high-res)
 - **Smart Caching**: File-based caching to minimize API calls
 - **Demo Mode**: Test without an API key using realistic synthetic data (includes Jan 8-9, 2024 NC storm)
 
@@ -132,10 +132,12 @@ python -m src.cli --help
 | `--output-dir` | Output directory | output/<region> |
 | `--severe-weather` | Enable severe weather overlay | True |
 | `--no-severe-weather` | Disable severe weather overlay | - |
-| `--tornado-paths` | Show tornado path polygons | True |
+| `--show-storm-markers` | Show storm markers & tornado paths on map | False |
+| `--tornado-paths` | Show tornado path polygons (when markers enabled) | True |
 | `--no-tornado-paths` | Disable tornado paths | - |
-| `--augment-storm-winds` | Incorporate storm winds into heatmap | True |
+| `--augment-storm-winds` | Incorporate storm winds into heatmap values | True |
 | `--no-augment-storm-winds` | Use only grid data for heatmap | - |
+| `--no-max-marker` | Hide star marker at peak wind location | False |
 | `--event-types` | Filter storm types (comma-separated) | all |
 
 ### Storm Wind Augmentation
@@ -167,13 +169,10 @@ Augmented max: 105.6 mph (after interpolation)
 
 ### Test Scripts
 
-Run the test scripts for quick demos:
+Run the comparison test script to see storm-only visualization:
 
 ```bash
-# Standard heatmap test
-python test_nc_geo_heatmap.py
-
-# Storm winds only visualization (for comparison)
+# Storm winds only visualization (for comparison with CLI output)
 python test_storm_winds_only.py
 ```
 
@@ -368,9 +367,10 @@ Wind_Simulation/
 │   └── comparison/              # Comparison visualizations
 ├── config/
 │   └── settings.py              # Configuration settings
-├── test_nc_geo_heatmap.py       # Test script for heatmaps
 ├── test_storm_winds_only.py     # Test script for storm-only visualization
+├── HOW_TO_USE.md                # Step-by-step usage guide
 ├── requirements.txt
+├── environment.yml              # Conda environment file
 ├── .env.example
 └── README.md
 ```
