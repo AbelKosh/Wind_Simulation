@@ -92,7 +92,6 @@ def create_storm_only_heatmap(
     end_date: date,
     output_path: Path,
     resolution: float = 0.1,
-    demo_mode: bool = True,
 ):
     """
     Create a heatmap using ONLY severe weather wind data.
@@ -103,7 +102,6 @@ def create_storm_only_heatmap(
         end_date: End date
         output_path: Output file path
         resolution: Grid resolution for interpolation
-        demo_mode: Whether to use demo data
     """
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -111,8 +109,8 @@ def create_storm_only_heatmap(
     # Import here to avoid circular import
     from src.api.weather_client import WeatherClient
     
-    # Fetch storm data
-    client = WeatherClient(demo_mode=demo_mode)
+    # Fetch storm data from NOAA Storm Events
+    client = WeatherClient()
     storm_data = client.get_local_storm_reports(
         lat_min=bounds.lat_min,
         lat_max=bounds.lat_max,
@@ -358,13 +356,12 @@ def main():
         end_date=end_date,
         output_path=output_dir / "storm_winds_only.png",
         resolution=0.05,  # Higher resolution for smoother interpolation
-        demo_mode=True,
     )
     
     print(f"\n✓ Storm-only heatmap saved to: {output_dir / 'storm_winds_only.png'}")
     print("\nTo compare with other visualizations, run:")
-    print("  # Combined (grid + storm): python -m src.cli --demo --format png")
-    print("  # Grid only: python -m src.cli --demo --format png --no-augment-storm-winds")
+    print("  # Combined (grid + storm): python -m src.cli --format png")
+    print("  # Grid only: python -m src.cli --format png --no-augment-storm-winds")
     print("\nOpen all three images to compare the visualizations.")
     
     return 0

@@ -119,13 +119,13 @@ class Settings(BaseSettings):
     )
     
     # ==========================================================================
-    # Demo Mode
+    # NOAA Data Configuration
     # ==========================================================================
-    demo_mode: bool = Field(
-        default=False,
-        description="Use demo data instead of making API calls"
+    noaa_cache_dir: Path = Field(
+        default=PROJECT_ROOT / "data" / "noaa_cache",
+        description="Directory for cached NOAA Storm Events data"
     )
-    
+
     # ==========================================================================
     # Validators
     # ==========================================================================
@@ -167,7 +167,7 @@ class Settings(BaseSettings):
     # ==========================================================================
     def ensure_directories(self) -> None:
         """Create all required directories if they don't exist."""
-        for directory in [self.cache_dir, self.export_dir, self.output_dir]:
+        for directory in [self.cache_dir, self.export_dir, self.output_dir, self.noaa_cache_dir]:
             directory.mkdir(parents=True, exist_ok=True)
     
     def get_api_key(self) -> str:
@@ -175,17 +175,13 @@ class Settings(BaseSettings):
         Get the API key, raising an error if not configured.
         
         Raises:
-            ValueError: If API key is not configured and not in demo mode
+            ValueError: If API key is not configured
         """
-        if self.demo_mode:
-            return "DEMO_MODE"
-        
         if not self.has_api_key:
             raise ValueError(
                 "Weather API key not configured!\n"
                 "Please set WEATHER_API_KEY in your .env file.\n"
-                "See .env.example for instructions.\n"
-                "Alternatively, set DEMO_MODE=true to use demo data."
+                "See .env.example for instructions."
             )
         return self.weather_api_key
 

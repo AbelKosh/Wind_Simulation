@@ -132,9 +132,9 @@ python -m src.cli --help
 
 You should see a list of available options.
 
-### Step 4: Configure API Key (Optional)
+### Step 4: Configure API Key (Required)
 
-To use real Weather Company data instead of demo mode:
+To use the Weather Company API for grid wind data:
 
 ```bash
 # Create a .env file
@@ -144,72 +144,72 @@ cp .env.example .env
 # WEATHER_API_KEY=your_api_key_here
 ```
 
-**Demo mode works without an API key** - it generates realistic synthetic data perfect for testing.
+**Note:** An API key is required for grid wind data. NOAA Storm Events data (for severe weather reports) does not require an API key and is downloaded automatically.
 
 ---
 
 ## 3. Quick Start Commands
 
-### Run with Demo Data (No API Key Required)
+### Basic Usage
 
 ```bash
-# Basic demo run - generates PNG, HTML, and CSV outputs
-python -m src.cli --demo
+# Basic run - generates PNG, HTML, and CSV outputs
+python -m src.cli
 
 # With verbose logging to see progress
-python -m src.cli --demo --verbose
+python -m src.cli --verbose
 ```
 
 ### Customize Date Range
 
 ```bash
 # Specific date range
-python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09 --demo
+python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09
 ```
 
 ### Adjust Resolution
 
 ```bash
 # Low resolution (fast, ~2,700 points for NC)
-python -m src.cli --resolution 0.1 --demo
+python -m src.cli --resolution 0.1
 
 # Medium resolution (balanced, ~10,800 points)
-python -m src.cli --resolution 0.05 --demo
+python -m src.cli --resolution 0.05
 
 # High resolution (slow, ~40,000 points, recommended max)
-python -m src.cli --resolution 0.025 --demo
+python -m src.cli --resolution 0.025
 ```
 
 ### Choose Output Format
 
 ```bash
 # Only PNG (static image)
-python -m src.cli --format png --demo
+python -m src.cli --format png
 
 # Only HTML (interactive map)
-python -m src.cli --format html --demo
+python -m src.cli --format html
 
 # Only CSV (data export)
-python -m src.cli --format csv --demo
+python -m src.cli --format csv
 
 # All formats (default)
-python -m src.cli --format all --demo
+python -m src.cli --format all
 ```
 
 ### Control Storm Data
 
 ```bash
 # Default: Storm data augments the heatmap values, but markers are hidden
-python -m src.cli --demo
+python -m src.cli
 
 # Show storm markers (tornado paths, thunderstorm wind locations)
-python -m src.cli --demo --show-storm-markers
+python -m src.cli --show-storm-markers
 
 # Disable storm wind augmentation (only show base grid data)
-python -m src.cli --demo --no-augment-storm-winds
+python -m src.cli --no-augment-storm-winds
 
 # Hide the star marker at the peak wind location
-python -m src.cli --demo --no-max-marker
+python -m src.cli --no-max-marker
 ```
 
 ---
@@ -256,7 +256,6 @@ python -m src.cli \
     --end-date 2024-01-09 \
     --resolution 0.025 \
     --format png \
-    --demo \
     --no-max-marker
 ```
 
@@ -267,7 +266,6 @@ python -m src.cli \
     --start-date 2024-01-08 \
     --end-date 2024-01-09 \
     --format html \
-    --demo \
     --show-storm-markers
 ```
 
@@ -276,8 +274,7 @@ python -m src.cli \
 ```bash
 python -m src.cli \
     --resolution 0.05 \
-    --format csv \
-    --demo
+    --format csv
 ```
 
 ### Use Case 4: Custom Region (Not North Carolina)
@@ -288,18 +285,17 @@ python -m src.cli \
     --lat-max 31.0 \
     --lon-min -87.5 \
     --lon-max -80.0 \
-    --resolution 0.1 \
-    --demo
+    --resolution 0.1
 ```
 
 ### Use Case 5: Compare Grid Data vs Storm-Augmented Data
 
 ```bash
 # Run with storm augmentation (default)
-python -m src.cli --demo --output-dir output/with_storm
+python -m src.cli --output-dir output/with_storm
 
 # Run without storm augmentation
-python -m src.cli --demo --no-augment-storm-winds --output-dir output/grid_only
+python -m src.cli --no-augment-storm-winds --output-dir output/grid_only
 ```
 
 ---
@@ -386,7 +382,7 @@ conda install -c conda-forge geopandas -y
 
 ```bash
 # Correct - augmentation is enabled by default
-python -m src.cli --demo
+python -m src.cli
 
 # Check output for: "Augmented interpolation complete: grid max=X mph, augmented max=Y mph"
 ```
@@ -399,18 +395,24 @@ python -m src.cli --demo
 
 ```bash
 # Start with 0.1° to test
-python -m src.cli --resolution 0.1 --demo
+python -m src.cli --resolution 0.1
 ```
 
 ### API rate limit exceeded
 
 **Cause:** Too many API calls in short time period.
 
-**Solution:** Use demo mode for testing, or reduce resolution:
+**Solution:** Reduce resolution or wait between runs:
 
 ```bash
-python -m src.cli --demo --resolution 0.1
+python -m src.cli --resolution 0.1
 ```
+
+### NOAA data not available for recent dates
+
+**Cause:** NOAA Storm Events data has approximately a 120-day publication delay.
+
+**Solution:** Use older dates or wait for data to become available. The application will show a warning and continue with empty storm data.
 
 ---
 
@@ -419,3 +421,6 @@ python -m src.cli --demo --resolution 0.1
 - Check the [README.md](README.md) for detailed API documentation
 - Review [.copilot/rules/project-rules.md](.copilot/rules/project-rules.md) for project conventions
 - Run `python -m src.cli --help` for complete CLI reference
+
+
+conda run -n wind_simulation python -m src.cli --start-date 2024-01-08 --end-date 2024-01-09 --region north_carolina --resolution 0.25 --format png

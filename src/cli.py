@@ -165,11 +165,6 @@ Examples:
     # Mode arguments
     mode_group = parser.add_argument_group('Mode')
     mode_group.add_argument(
-        '--demo',
-        action='store_true',
-        help='Use demo mode with synthetic data (no API key required)'
-    )
-    mode_group.add_argument(
         '--no-cache',
         action='store_true',
         help='Disable caching of API responses'
@@ -243,7 +238,6 @@ def run_heatmap(
     resolution: float,
     output_dir: Path,
     output_format: str = 'all',
-    demo_mode: bool = False,
     use_cache: bool = True,
     smoothing_factor: int = 4,
     alpha: float = 0.5,
@@ -264,7 +258,6 @@ def run_heatmap(
         resolution: Grid resolution in degrees
         output_dir: Directory for output files
         output_format: Output format ('png', 'html', 'csv', or 'all')
-        demo_mode: Whether to use demo data
         use_cache: Whether to cache API responses
         smoothing_factor: Interpolation upsampling factor
         alpha: Heatmap transparency
@@ -286,9 +279,8 @@ def run_heatmap(
                 f"{grid_size['total']} points")
     
     # Initialize client
-    client = WeatherClient(demo_mode=demo_mode)
-    mode_str = "DEMO MODE" if demo_mode else "API MODE"
-    logger.info(f"Using {mode_str}")
+    client = WeatherClient()
+    logger.info("Using Weather Company API for grid data, NOAA for storm reports")
     
     # Fetch grid data
     logger.info("Fetching wind data for grid points...")
@@ -313,7 +305,7 @@ def run_heatmap(
     # Fetch severe weather reports if enabled
     storm_data = None
     if include_severe_weather:
-        logger.info("Fetching severe weather reports...")
+        logger.info("Fetching severe weather reports from NOAA...")
         storm_data = client.get_local_storm_reports(
             lat_min=bounds.lat_min,
             lat_max=bounds.lat_max,
@@ -435,9 +427,6 @@ def main(argv: Optional[list] = None) -> int:
         region_slug = (bounds.name or args.region).lower().replace(' ', '_').replace(',', '')
         output_dir = project_root / "output" / region_slug
     
-    # Determine demo mode
-    demo_mode = args.demo or settings.demo_mode or not settings.has_api_key
-    
     # Determine severe weather settings
     include_severe_weather = args.severe_weather and not args.no_severe_weather
     show_storm_markers = args.show_storm_markers
@@ -457,7 +446,7 @@ def main(argv: Optional[list] = None) -> int:
     print(f"Resolution: {resolution}°")
     print(f"Output Directory: {output_dir}")
     print(f"Format: {args.format}")
-    print(f"Mode: {'Demo' if demo_mode else 'API'}")
+    print(f"Data Sources: Weather Company API (grid), NOAA Storm Events (storms)")
     print(f"Severe Weather Overlay: {'Enabled' if include_severe_weather else 'Disabled'}")
     if include_severe_weather:
         print(f"  Show Storm Markers: {'Enabled' if show_storm_markers else 'Disabled'}")
@@ -476,7 +465,6 @@ def main(argv: Optional[list] = None) -> int:
             resolution=resolution,
             output_dir=output_dir,
             output_format=args.format,
-            demo_mode=demo_mode,
             use_cache=not args.no_cache,
             smoothing_factor=args.smoothing,
             alpha=args.alpha,

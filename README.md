@@ -5,6 +5,7 @@ A Python application for fetching historical wind data from the Weather Company 
 ## 🌪️ Features
 
 - **Geographic Heatmaps**: Map-based visualizations showing peak wind speeds across regions
+- **NOAA Storm Events Integration**: Historical severe weather data from NOAA Storm Events Database
 - **Severe Weather Integration**: Local Storm Reports (LSR) for tornado and thunderstorm wind data
 - **Storm Wind Augmentation**: Combine grid and severe weather data using "max wins" logic
 - **Tornado Path Visualization**: EF-rated tornado paths with color-coded overlays
@@ -16,8 +17,7 @@ A Python application for fetching historical wind data from the Weather Company 
 - **CSV Data Export**: Export coordinates and wind speeds for external analysis tools
 - **Command-Line Interface**: Full CLI for scripted/automated usage
 - **Grid-Based Fetching**: Collect data across configurable geographic grids (0.01° to 0.25° resolution; 0.025° recommended for high-res)
-- **Smart Caching**: File-based caching to minimize API calls
-- **Demo Mode**: Test without an API key using realistic synthetic data (includes Jan 8-9, 2024 NC storm)
+- **Smart Caching**: File-based caching to minimize API calls and NOAA downloads
 
 ## 📋 Table of Contents
 
@@ -63,7 +63,7 @@ A Python application for fetching historical wind data from the Weather Company 
    - `folium` - Interactive maps
    - `matplotlib` - Static visualizations
 
-4. **Configure environment** (optional, for API access)
+4. **Configure environment**
    ```bash
    cp .env.example .env
    # Edit .env and add your Weather Company API key
@@ -76,18 +76,18 @@ A Python application for fetching historical wind data from the Weather Company 
 Create a `.env` file in the project root (or copy from `.env.example`):
 
 ```env
-# Weather Company API Key (optional - demo mode available)
+# Weather Company API Key (required for grid wind data)
 WEATHER_API_KEY=your_api_key_here
 ```
 
-### Demo Mode
+### Data Sources
 
-If no API key is configured, the application runs in **demo mode**:
-- Generates realistic, spatially coherent synthetic wind data
-- Includes coastal effects, storm patterns, and diurnal variation
-- Includes realistic severe weather data from the January 8-9, 2024 NC storm event
-- Demo storm data includes EF1 tornadoes (Claremont, New Bern, Harkers Island) and thunderstorm wind reports
-- All features work normally - useful for testing and development
+The application uses two data sources:
+
+1. **Weather Company API** (requires API key): Provides historical hourly wind observations at grid points
+2. **NOAA Storm Events Database** (no API key required): Provides historical severe weather reports including tornadoes, thunderstorm winds, and high wind events
+
+NOAA Storm Events data is automatically downloaded and cached on first use. Note that NOAA data has approximately a 120-day publication delay.
 
 ## 🎯 Quick Start
 
@@ -96,20 +96,20 @@ If no API key is configured, the application runs in **demo mode**:
 The easiest way to generate heatmaps is via the CLI:
 
 ```bash
-# Generate heatmap for North Carolina with demo data
-python -m src.cli --demo
+# Generate heatmap for North Carolina
+python -m src.cli
 
 # Custom date range
-python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09 --demo
+python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09
 
 # Custom geographic bounds
-python -m src.cli --lat-min 35.0 --lat-max 36.5 --lon-min -80 --lon-max -75 --demo
+python -m src.cli --lat-min 35.0 --lat-max 36.5 --lon-min -80 --lon-max -75
 
 # High resolution (0.05° ≈ 5.5km)
-python -m src.cli --resolution 0.05 --demo
+python -m src.cli --resolution 0.05
 
 # Output only CSV data
-python -m src.cli --format csv --demo
+python -m src.cli --format csv
 
 # See all options
 python -m src.cli --help
@@ -128,7 +128,6 @@ python -m src.cli --help
 | `--format` | Output format (png/html/csv/all) | all |
 | `--smoothing` | Interpolation factor (1-8) | 4 |
 | `--alpha` | Heatmap transparency (0-1) | 0.5 |
-| `--demo` | Use synthetic data | False |
 | `--output-dir` | Output directory | output/<region> |
 | `--severe-weather` | Enable severe weather overlay | True |
 | `--no-severe-weather` | Disable severe weather overlay | - |
@@ -142,25 +141,25 @@ python -m src.cli --help
 
 ### Storm Wind Augmentation
 
-When `--augment-storm-winds` is enabled (default), the tool combines historical grid data with severe weather observations:
+When `--augment-storm-winds` is enabled (default), the tool combines historical grid data with severe weather observations from NOAA Storm Events:
 
 ```bash
 # Default: grid + storm winds combined (max wins)
-python -m src.cli --demo
+python -m src.cli
 
 # Compare different visualizations:
-python -m src.cli --demo --no-augment-storm-winds  # Grid data only
-python test_storm_winds_only.py                      # Storm data only
+python -m src.cli --no-augment-storm-winds  # Grid data only
+python test_storm_winds_only.py              # Storm data only
 ```
 
 **How it works:**
-1. Fetch historical wind data at regular grid points (e.g., 0.25° resolution)
-2. Fetch Local Storm Reports (tornado, thunderstorm wind, high wind events)
+1. Fetch historical wind data at regular grid points (e.g., 0.25° resolution) from Weather Company API
+2. Fetch historical storm reports from NOAA Storm Events Database (tornado, thunderstorm wind, high wind events)
 3. For tornadoes, estimate wind speeds from EF rating (EF1 ≈ 98 mph)
 4. For each grid cell, keep the **maximum** wind value (grid vs storm) - values are never summed
 5. Apply bicubic interpolation for smooth visualization
 
-**Example output (demo mode):**
+**Example output:**
 ```
 Grid max: 32.8 mph
 Storm max: 98 mph (EF1 tornado)
@@ -191,7 +190,6 @@ results = run_heatmap(
     resolution=0.1,
     output_dir=Path("output/my_analysis"),
     output_format='all',
-    demo_mode=True,
     smoothing_factor=4,
     alpha=0.5,
 )
@@ -213,8 +211,8 @@ from src.visualization.geo_heatmap import (
     export_grid_to_csv,
 )
 
-# Initialize client (demo_mode=True for testing without API key)
-client = WeatherClient(demo_mode=True)
+# Initialize client
+client = WeatherClient()
 
 # Get region bounds
 nc_bounds = PRESET_REGIONS["north_carolina"]
@@ -306,7 +304,7 @@ custom_bounds = GridBounds(
 
 ### Weather Company API
 
-This application uses two Weather Company (IBM) APIs:
+This application uses the Weather Company (IBM) API for grid wind data:
 
 #### Historical Weather API
 - **Endpoint**: `GET /v3/wx/observations/hourly/history`
@@ -314,11 +312,16 @@ This application uses two Weather Company (IBM) APIs:
 - **Rate Limits**: 100 requests per minute (configurable)
 - **Automatic retry**: Exponential backoff on rate limit errors
 
-#### Severe Weather API (Local Storm Reports)
-- **Endpoint**: `GET /v2/alerts/lsr`
-- **Purpose**: Fetch tornado, thunderstorm wind, and hail reports
-- **Event Types**: tornado, thunderstorm_wind, hail, high_wind, flash_flood, wildfire
-- **Data Returned**: Location, timestamp, magnitude (wind speed/hail size), EF rating for tornadoes
+### NOAA Storm Events Database
+
+Severe weather data is sourced from NOAA's Storm Events Database:
+
+- **Source**: https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
+- **Purpose**: Historical tornado, thunderstorm wind, hail, and high wind reports
+- **Data Format**: Gzipped CSV files organized by year
+- **Event Types**: Tornado, Thunderstorm Wind, High Wind, Hail, Flash Flood, and more
+- **Data Delay**: Approximately 120 days from event to publication
+- **Caching**: Downloaded files are cached locally in `data/noaa_cache/`
 
 ### EF Rating Wind Speed Mapping
 
@@ -350,7 +353,8 @@ Wind_Simulation/
 │   ├── cli.py                   # Command-line interface
 │   ├── api/
 │   │   ├── cache.py             # API response caching
-│   │   └── weather_client.py    # Weather + Severe Weather APIs
+│   │   ├── weather_client.py    # Weather Company API client
+│   │   └── noaa_client.py       # NOAA Storm Events client
 │   ├── data/
 │   │   ├── models.py            # Pydantic models (wind + storm data)
 │   │   ├── processor.py         # Data processing utilities
@@ -360,7 +364,8 @@ Wind_Simulation/
 │       ├── geo_heatmap.py       # Cartopy heatmap, storm overlays, CSV export
 │       └── styles.py            # Visualization styling
 ├── data/
-│   ├── cache/                   # Cached API responses
+│   ├── cache/                   # Cached Weather API responses
+│   ├── noaa_cache/              # Cached NOAA Storm Events files
 │   └── shapefiles/              # Cached TIGER shapefiles
 ├── output/
 │   ├── north_carolina/          # Default output directory
@@ -378,13 +383,18 @@ Wind_Simulation/
 ## 🔧 Troubleshooting
 
 ### "No API key configured"
-The application will use demo mode with synthetic data. For real data, add your API key to `.env`.
+A Weather Company API key is required for fetching grid wind data. Add your API key to `.env`. 
+Note: NOAA Storm Events data does not require an API key and will still work.
 
 ### "Rate limit exceeded"
 The application automatically handles rate limits with backoff. For large grids, consider:
 - Using lower resolution (0.5° instead of 0.25°)
 - Enabling caching (`use_cache=True`)
 - Waiting between runs
+
+### NOAA data not available
+NOAA Storm Events data has approximately a 120-day publication delay. If querying recent dates, 
+storm data may not yet be available. The application will show a warning and continue with empty storm data.
 
 ### High memory usage
 For large grids (>1000 points), the application may use significant memory. Consider:

@@ -19,8 +19,6 @@ Usage:
 
 import logging
 import time
-import random
-import math
 from collections import deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -92,7 +90,6 @@ class WeatherClient:
         api_key: Optional[str] = None,
         settings: Optional[Settings] = None,
         cache_dir: Optional[Path] = None,
-        demo_mode: Optional[bool] = None,
     ):
         """
         Initialize the Weather API client.
@@ -101,32 +98,14 @@ class WeatherClient:
             api_key: API key (uses settings if not provided)
             settings: Settings object (uses default if not provided)
             cache_dir: Override cache directory
-            demo_mode: Force demo mode if True
         """
         self.settings = settings or get_settings()
         
-        # Determine demo mode
-        if demo_mode is True:
-            self.demo_mode = True
-            self.api_key = "DEMO_MODE"
-        elif demo_mode is False:
-            self.demo_mode = False
-            # Get API key
-            if api_key:
-                self.api_key = api_key
-            else:
-                self.api_key = self.settings.get_api_key()
+        # Get API key
+        if api_key:
+            self.api_key = api_key
         else:
-            # Auto-detect based on settings
-            if self.settings.demo_mode:
-                self.demo_mode = True
-                self.api_key = "DEMO_MODE"
-            elif api_key:
-                self.api_key = api_key
-                self.demo_mode = False
-            else:
-                self.api_key = self.settings.get_api_key()
-                self.demo_mode = not self.settings.has_api_key
+            self.api_key = self.settings.get_api_key()
         
         self.base_url = self.settings.weather_api_base_url.rstrip("/")
         
@@ -139,7 +118,10 @@ class WeatherClient:
         # Initialize cache manager
         self.cache = CacheManager()
         
-        logger.info(f"WeatherClient initialized (demo_mode={self.demo_mode})")
+        # Initialize NOAA client for storm reports (lazy import to avoid circular)
+        self._noaa_client = None
+        
+        logger.info("WeatherClient initialized")
     
     def _create_session(self) -> requests.Session:
         """Create requests session with retry configuration."""
@@ -362,169 +344,6 @@ class WeatherClient:
             cardinal_direction=cardinal,
         )
     
-    def _generate_demo_data(
-        self,
-        latitude: float,
-        longitude: float,
-        start_date: date,
-        end_date: date,
-    ) -> WindDataResponse:
-        """
-        Generate realistic demo data for testing without API.
-        
-        Creates synthetic wind data with realistic patterns:
-        - Spatial coherence (nearby locations have similar wind)
-        - Coastal enhancement (stronger winds near coasts)
-        - Diurnal variation (stronger afternoon winds)
-        - Random variation
-        - Occasional gusts
-        
-        Args:
-            latitude: Location latitude
-            longitude: Location longitude
-            start_date: Start date
-            end_date: End date
-            
-        Returns:
-            WindDataResponse with synthetic data
-        """
-        logger.info("Generating demo data (no API call)")
-        
-        observations = []
-        current = datetime.combine(start_date, datetime.min.time())
-        end = datetime.combine(end_date, datetime.max.time())
-        
-        # Create a deterministic seed based on location for spatial coherence
-        # Use a hash that creates smooth spatial variation
-        loc_seed = int(abs(latitude * 100) * 1000 + abs(longitude * 100)) % (2**31)
-        random.seed(loc_seed)
-        
-        # Spatial wind pattern using simplified Perlin-like noise
-        # This creates a smooth spatial field that varies across geography
-        spatial_wind_factor = self._get_spatial_wind_factor(latitude, longitude, start_date)
-        
-        # Base wind speed with spatial variation (8-18 mph range for typical day)
-        base_wind = 8 + 10 * spatial_wind_factor
-        
-        # Coastal enhancement: Stronger winds near the coast (approximated by longitude for East Coast)
-        # East coast: stronger winds as longitude increases (closer to -75° = coast)
-        if longitude > -85 and longitude < -70:  # East coast region
-            coast_factor = 1 + 0.3 * (1 - abs(longitude + 75) / 10)
-            coast_factor = max(1.0, min(1.4, coast_factor))
-        else:
-            coast_factor = 1.0
-        
-        base_wind *= coast_factor
-        
-        # Add regional weather pattern (simulate a low pressure system)
-        # Creates a "storm center" that affects nearby points (more subtle effect)
-        storm_lat, storm_lon = self._get_storm_center(start_date)
-        dist_to_storm = math.sqrt((latitude - storm_lat)**2 + (longitude - storm_lon)**2)
-        storm_factor = max(0.7, min(1.5, 1.5 - dist_to_storm / 5))  # More subtle storm effect
-        
-        while current <= end:
-            hour = current.hour
-            
-            # Diurnal pattern: stronger in afternoon (peak around 3 PM)
-            diurnal_factor = 1.0 + 0.25 * math.sin((hour - 6) * math.pi / 12)
-            
-            # Random hourly variation (smaller for spatial coherence)
-            random_factor = random.uniform(0.9, 1.1)
-            
-            # Calculate wind speed
-            wind_speed = base_wind * diurnal_factor * random_factor * storm_factor
-            
-            # Add occasional stronger gusts/events
-            if random.random() < 0.03:  # 3% chance
-                wind_speed *= random.uniform(1.2, 1.5)
-            
-            # Ensure reasonable range (typical non-storm day: 5-40 mph)
-            wind_speed = max(3, min(45, wind_speed))
-            
-            # Wind direction - prevailing direction varies by region
-            # Outer banks: Predominantly SW to NE winds
-            base_direction = 225 + random.uniform(-30, 30)  # SW-ish
-            
-            # Storm influence on direction
-            if dist_to_storm < 5:
-                # Wind spirals around low pressure (counterclockwise in NH)
-                angle_to_storm = math.atan2(storm_lat - latitude, storm_lon - longitude)
-                storm_dir = math.degrees(angle_to_storm) + 90  # Perpendicular, counterclockwise
-                base_direction = storm_dir + random.uniform(-20, 20)
-            
-            direction = base_direction % 360
-            
-            # Gust (usually 1.2-1.5x sustained, higher during storms)
-            gust_multiplier = random.uniform(1.2, 1.6) if dist_to_storm > 3 else random.uniform(1.4, 2.0)
-            if random.random() < 0.85:  # 85% have gust data
-                gust = wind_speed * gust_multiplier
-            else:
-                gust = None
-            
-            # Temperature (cooler near coast, varies with wind)
-            temp_base = 55 - (latitude - 35) * 3  # Cooler further north
-            temp_base -= coast_factor * 5  # Cooler near coast
-            temp_diurnal = 10 * math.sin((hour - 6) * math.pi / 12)  # Warmer afternoon
-            temperature = temp_base + temp_diurnal + random.uniform(-3, 3)
-            
-            observations.append(WindObservation(
-                timestamp=current,
-                wind_speed=round(wind_speed, 1),
-                wind_direction=round(direction, 0),
-                wind_gust=round(gust, 1) if gust else None,
-                temperature=round(temperature, 1),
-            ))
-            
-            current += timedelta(hours=1)
-        
-        return WindDataResponse(
-            observations=observations,
-            location=Location(latitude=latitude, longitude=longitude),
-            time_range=TimeRange.from_dates(start_date, end_date),
-            units="imperial",
-            source="demo_data",
-        )
-    
-    def _get_spatial_wind_factor(self, lat: float, lon: float, target_date: date) -> float:
-        """
-        Generate a spatially coherent wind factor using simplified noise.
-        
-        Creates smooth spatial variation so nearby points have similar values.
-        """
-        # Use sine waves at different frequencies for pseudo-noise
-        # This creates a smooth, spatially varying field
-        scale1 = 0.5  # Large scale features
-        scale2 = 1.5  # Medium scale
-        scale3 = 4.0  # Small scale detail
-        
-        # Date influences the pattern (different each day)
-        day_offset = target_date.toordinal() * 0.1
-        
-        noise = (
-            0.4 * math.sin(lat * scale1 + lon * scale1 * 0.7 + day_offset) +
-            0.3 * math.sin(lat * scale2 * 1.3 + lon * scale2 + day_offset * 2) +
-            0.2 * math.sin(lat * scale3 + lon * scale3 * 0.9 + day_offset * 3) +
-            0.1 * math.sin((lat + lon) * scale3 * 1.5)
-        )
-        
-        # Normalize to 0-1 range
-        return (noise + 1) / 2
-    
-    def _get_storm_center(self, target_date: date) -> tuple:
-        """
-        Get a simulated storm center location for a given date.
-        
-        Creates a consistent "weather system" that affects the region.
-        """
-        # Storm center varies by date but is deterministic
-        random.seed(target_date.toordinal())
-        
-        # Storm somewhere in the Southeast US
-        storm_lat = random.uniform(33, 37)
-        storm_lon = random.uniform(-82, -76)
-        
-        return storm_lat, storm_lon
-    
     def get_historical_wind(
         self,
         latitude: float,
@@ -567,16 +386,6 @@ class WeatherClient:
                 if cached and "data" in cached:
                     logger.info(f"Using cached data for {cache_key}")
                     return WindDataResponse.from_dict(cached["data"])
-        
-        # Demo mode - generate synthetic data
-        if self.demo_mode:
-            response = self._generate_demo_data(latitude, longitude, start_date, end_date)
-            
-            # Cache demo data too
-            if use_cache:
-                self.cache.save_to_cache(cache_key, response.to_dict())
-            
-            return response
         
         # Make API request
         logger.info(f"Fetching wind data: ({latitude}, {longitude}) from {start_date} to {end_date}")
@@ -639,6 +448,9 @@ class WeatherClient:
         """
         Fetch Local Storm Reports (LSR) for a bounding box and time range.
         
+        Uses NOAA Storm Events database for historical data. Note that NOAA
+        data has an approximate 120-day publication delay.
+        
         Args:
             lat_min: Minimum latitude (southern boundary)
             lat_max: Maximum latitude (northern boundary)
@@ -651,59 +463,22 @@ class WeatherClient:
             
         Returns:
             SevereWeatherResponse with storm reports
-            
-        Raises:
-            WeatherAPIError: For API errors
         """
-        # Demo mode - generate synthetic storm reports
-        if self.demo_mode:
-            return self._generate_demo_storm_reports(
-                lat_min, lat_max, lon_min, lon_max,
-                start_date, end_date, event_types, include_tornado_paths
-            )
+        # Use NOAA Storm Events data for historical storm reports
+        if self._noaa_client is None:
+            from src.api.noaa_client import NOAAStormClient
+            self._noaa_client = NOAAStormClient()
         
-        # Weather Company LSR API endpoint
-        endpoint = "/v2/alerts/lsr"
-        
-        params = {
-            "geocode": f"{(lat_min + lat_max) / 2},{(lon_min + lon_max) / 2}",
-            "bbox": f"{lat_max},{lon_min},{lat_min},{lon_max}",
-            "startDate": start_date.strftime("%Y%m%d"),
-            "endDate": end_date.strftime("%Y%m%d"),
-            "format": "json",
-        }
-        
-        if event_types:
-            params["eventType"] = ",".join(event_types)
-        
-        logger.info(f"Fetching storm reports: ({lat_min}-{lat_max}°N, {lon_min}-{lon_max}°E) "
-                   f"from {start_date} to {end_date}")
-        
-        raw_data = self._make_request(endpoint, params)
-        
-        # Parse storm reports
-        reports = []
-        for report_data in raw_data.get("localStormReports", []):
-            try:
-                report = self._parse_storm_report(report_data, include_tornado_paths)
-                if report:
-                    reports.append(report)
-            except Exception as e:
-                logger.warning(f"Failed to parse storm report: {e}")
-        
-        # Filter by event types if specified
-        if event_types:
-            reports = [r for r in reports if r.event_type.lower() in [t.lower() for t in event_types]]
-        
-        response = SevereWeatherResponse(
-            reports=reports,
-            time_range=TimeRange.from_dates(start_date, end_date),
-            bounds={"lat_min": lat_min, "lat_max": lat_max, "lon_min": lon_min, "lon_max": lon_max},
+        return self._noaa_client.get_storm_reports(
+            lat_min=lat_min,
+            lat_max=lat_max,
+            lon_min=lon_min,
+            lon_max=lon_max,
+            start_date=start_date,
+            end_date=end_date,
+            event_types=event_types,
+            include_tornado_paths=include_tornado_paths,
         )
-        
-        logger.info(f"Retrieved {response.count} storm reports ({response.tornado_count} tornadoes)")
-        
-        return response
     
     def _parse_storm_report(
         self,
@@ -763,6 +538,190 @@ class WeatherClient:
             logger.warning(f"Failed to parse storm report: {e}")
             return None
     
+    def _parse_storm_report_v2(
+        self,
+        data: dict,
+        include_tornado_path: bool = True
+    ) -> Optional[StormReport]:
+        """
+        Parse a single storm report from v2 stormreports API response.
+        
+        Based on the Weather Company v2/stormreports API format:
+        - datetime_gmt: Unix timestamp
+        - latitude/longitude: Coordinates
+        - event_type: Event type string (e.g., "HAIL", "TORNADO", "TSTM WND DMG")
+        - magnitude: Numeric value (string or null)
+        - magnitude_units: "INCHES", "MPH", or null
+        
+        Args:
+            data: Raw report data from API
+            include_tornado_path: Whether to parse tornado path data
+            
+        Returns:
+            StormReport or None if parsing fails
+        """
+        try:
+            # Parse timestamp from datetime_gmt (Unix epoch)
+            datetime_gmt = data.get("datetime_gmt")
+            if datetime_gmt:
+                timestamp = datetime.utcfromtimestamp(int(datetime_gmt))
+            else:
+                # Fallback to datetime_local
+                local_time = data.get("datetime_local")
+                if local_time:
+                    timestamp = datetime.fromisoformat(local_time.replace("Z", "+00:00"))
+                else:
+                    logger.warning("No timestamp found in storm report")
+                    return None
+            
+            # Get location
+            lat = float(data.get("latitude", 0))
+            lon = float(data.get("longitude", 0))
+            
+            if lat == 0 and lon == 0:
+                logger.warning("Invalid coordinates in storm report")
+                return None
+            
+            # Get event type - normalize to lowercase
+            event_type_raw = data.get("event_type", "unknown")
+            event_type = self._normalize_event_type(event_type_raw)
+            
+            # Parse magnitude
+            magnitude = data.get("magnitude")
+            if magnitude is not None and magnitude != "":
+                try:
+                    magnitude = float(magnitude)
+                except (ValueError, TypeError):
+                    magnitude = None
+            else:
+                magnitude = None
+            
+            # Get magnitude unit
+            magnitude_unit_raw = data.get("magnitude_units", "")
+            if magnitude_unit_raw:
+                magnitude_unit = "mph" if magnitude_unit_raw.upper() == "MPH" else magnitude_unit_raw.lower()
+            else:
+                magnitude_unit = "mph"
+            
+            # Parse tornado path if applicable
+            tornado_path = None
+            if include_tornado_path and event_type == "tornado":
+                tornado_path = self._parse_tornado_path_v2(data)
+            
+            return StormReport(
+                event_type=event_type,
+                latitude=lat,
+                longitude=lon,
+                timestamp=timestamp,
+                magnitude=magnitude,
+                magnitude_unit=magnitude_unit,
+                description=data.get("comments"),
+                source=data.get("source") or data.get("bulletin_source"),
+                location_name=data.get("location"),
+                state=data.get("state_code"),
+                county=data.get("geo_name"),
+                tornado_path=tornado_path,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse v2 storm report: {e}")
+            return None
+    
+    def _normalize_event_type(self, event_type: str) -> str:
+        """
+        Normalize event type strings from the API to consistent format.
+        
+        Args:
+            event_type: Raw event type string from API
+            
+        Returns:
+            Normalized event type string
+        """
+        event_type_upper = event_type.upper().strip()
+        
+        # Map common event types to normalized names
+        event_type_map = {
+            "TORNADO": "tornado",
+            "TSTM WND DMG": "thunderstorm_wind",
+            "TSTM WIND DMG": "thunderstorm_wind",
+            "TSTM WND GST": "thunderstorm_wind",
+            "TSTM WIND GST": "thunderstorm_wind",
+            "THUNDERSTORM WIND": "thunderstorm_wind",
+            "THUNDERSTORM WIND DAMAGE": "thunderstorm_wind",
+            "THUNDERSTORM WIND GUST": "thunderstorm_wind",
+            "HAIL": "hail",
+            "HIGH WIND": "high_wind",
+            "NON-TSTM WND DMG": "high_wind",
+            "NON-TSTM WND GST": "high_wind",
+            "FLASH FLOOD": "flash_flood",
+            "FLOOD": "flood",
+            "HEAVY RAIN": "heavy_rain",
+            "SNOW": "snow",
+            "HEAVY SNOW": "snow",
+            "24 HOUR SNOWFALL": "snow",
+            "ICE STORM": "ice_storm",
+            "WILDFIRE": "wildfire",
+        }
+        
+        return event_type_map.get(event_type_upper, event_type.lower().replace(" ", "_"))
+    
+    def _parse_tornado_path_v2(self, data: dict) -> Optional[TornadoPath]:
+        """
+        Parse tornado path data from v2 storm report.
+        
+        Note: v2 stormreports API typically doesn't include detailed path data,
+        so we create a single-point path from the report location.
+        
+        Args:
+            data: Raw report data
+            
+        Returns:
+            TornadoPath or None
+        """
+        try:
+            lat = float(data.get("latitude", 0))
+            lon = float(data.get("longitude", 0))
+            
+            if lat == 0 and lon == 0:
+                return None
+            
+            # Create single-point path from report location
+            path_points = [TornadoPathPoint(latitude=lat, longitude=lon)]
+            
+            # Try to estimate EF rating from magnitude or severity
+            ef_rating = None
+            magnitude = data.get("magnitude")
+            severity = data.get("severity", 5)
+            
+            # If magnitude looks like an EF rating
+            if magnitude:
+                mag_str = str(magnitude).upper()
+                if mag_str.startswith("EF"):
+                    ef_rating = mag_str
+                elif mag_str in ["0", "1", "2", "3", "4", "5"]:
+                    ef_rating = f"EF{mag_str}"
+            
+            # Estimate from severity if no EF rating found
+            if not ef_rating and severity:
+                severity_int = int(severity)
+                if severity_int >= 9:
+                    ef_rating = "EF3"
+                elif severity_int >= 7:
+                    ef_rating = "EF2"
+                elif severity_int >= 5:
+                    ef_rating = "EF1"
+                else:
+                    ef_rating = "EF0"
+            
+            return TornadoPath(
+                path_points=path_points,
+                ef_rating=ef_rating,
+                path_length_miles=None,
+                path_width_yards=None,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse tornado path from v2 data: {e}")
+            return None
+
     def _parse_tornado_path(self, data: dict) -> Optional[TornadoPath]:
         """
         Parse tornado path data from storm report.
@@ -823,167 +782,6 @@ class WeatherClient:
         except Exception as e:
             logger.debug(f"Failed to parse tornado path: {e}")
             return None
-    
-    def _generate_demo_storm_reports(
-        self,
-        lat_min: float,
-        lat_max: float,
-        lon_min: float,
-        lon_max: float,
-        start_date: date,
-        end_date: date,
-        event_types: Optional[List[str]] = None,
-        include_tornado_paths: bool = True,
-    ) -> SevereWeatherResponse:
-        """
-        Generate realistic demo storm reports for the January 8-9, 2024 event.
-        
-        This creates synthetic data matching the real tornado outbreak that
-        affected North Carolina on January 9, 2024.
-        """
-        logger.info("Generating demo storm reports for Jan 8-9, 2024 event")
-        
-        reports = []
-        
-        # Real tornado data from January 9, 2024 NC event
-        # Source: NWS storm reports and Wikipedia
-        nc_tornadoes = [
-            {
-                "name": "Newton-Catawba EF1",
-                "start_lat": 35.657, "start_lon": -81.157,
-                "end_lat": 35.72, "end_lon": -80.95,
-                "ef_rating": "EF1",
-                "timestamp": datetime(2024, 1, 9, 17, 27),  # 17:27 UTC
-                "length_miles": 9.02,
-                "max_width_yards": 250,
-                "fatalities": 1,
-                "injuries": 4,
-                "description": "High-end EF1 tornado touched down in Catawba County near Claremont. "
-                              "Multiple manufactured homes seriously damaged. One fatality."
-            },
-            {
-                "name": "New Bern EF1",
-                "start_lat": 35.196, "start_lon": -77.056,
-                "end_lat": 35.24, "end_lon": -76.95,
-                "ef_rating": "EF1",
-                "timestamp": datetime(2024, 1, 9, 1, 3),  # 01:03 UTC (Jan 9)
-                "length_miles": 5.02,
-                "max_width_yards": 125,
-                "fatalities": 0,
-                "injuries": 0,
-                "description": "Agricultural building had metal roofing torn off. "
-                              "Multiple trees snapped along the path."
-            },
-            {
-                "name": "Harkers Island EF1",
-                "start_lat": 34.6933, "start_lon": -76.5592,
-                "end_lat": 34.70, "end_lon": -76.55,
-                "ef_rating": "EF1",
-                "timestamp": datetime(2024, 1, 9, 2, 9),  # 02:09 UTC
-                "length_miles": 0.23,
-                "max_width_yards": 75,
-                "fatalities": 0,
-                "injuries": 0,
-                "description": "Tornadic waterspout moved inland. House suffered major roof damage."
-            },
-            {
-                "name": "Harkers Island EF0",
-                "start_lat": 34.6982, "start_lon": -76.579,
-                "end_lat": 34.705, "end_lon": -76.57,
-                "ef_rating": "EF0",
-                "timestamp": datetime(2024, 1, 9, 2, 9),  # 02:09 UTC (simultaneous)
-                "length_miles": 0.14,
-                "max_width_yards": 60,
-                "fatalities": 0,
-                "injuries": 0,
-                "description": "Second tornadic waterspout. Roof damage to multiple homes."
-            },
-        ]
-        
-        # High wind reports (thunderstorm wind)
-        high_wind_reports = [
-            {"lat": 35.7, "lon": -78.8, "magnitude": 58, "location": "Raleigh", 
-             "timestamp": datetime(2024, 1, 9, 14, 30), "description": "Trees down, power outages"},
-            {"lat": 35.2, "lon": -80.8, "magnitude": 62, "location": "Charlotte",
-             "timestamp": datetime(2024, 1, 9, 16, 45), "description": "Widespread damage"},
-            {"lat": 36.1, "lon": -79.8, "magnitude": 55, "location": "Greensboro",
-             "timestamp": datetime(2024, 1, 9, 13, 15), "description": "Tree limbs down"},
-            {"lat": 35.9, "lon": -78.5, "magnitude": 52, "location": "Durham",
-             "timestamp": datetime(2024, 1, 9, 14, 0), "description": "Power lines down"},
-            {"lat": 34.8, "lon": -77.4, "magnitude": 65, "location": "Jacksonville",
-             "timestamp": datetime(2024, 1, 9, 3, 30), "description": "Significant wind damage"},
-            {"lat": 35.5, "lon": -77.0, "magnitude": 48, "location": "Greenville",
-             "timestamp": datetime(2024, 1, 9, 2, 0), "description": "Trees and limbs down"},
-            {"lat": 34.2, "lon": -77.9, "magnitude": 71, "location": "Wilmington",
-             "timestamp": datetime(2024, 1, 9, 4, 15), "description": "Severe wind damage, roof damage"},
-        ]
-        
-        # Only include if within bounds
-        for tornado in nc_tornadoes:
-            if not (lat_min <= tornado["start_lat"] <= lat_max and 
-                    lon_min <= tornado["start_lon"] <= lon_max):
-                continue
-            
-            # Create tornado path
-            path = None
-            if include_tornado_paths:
-                path = TornadoPath(
-                    path_points=[
-                        TornadoPathPoint(latitude=tornado["start_lat"], longitude=tornado["start_lon"]),
-                        TornadoPathPoint(latitude=tornado["end_lat"], longitude=tornado["end_lon"]),
-                    ],
-                    ef_rating=tornado["ef_rating"],
-                    start_time=tornado["timestamp"],
-                    end_time=tornado["timestamp"] + timedelta(minutes=8),
-                    max_width_yards=tornado["max_width_yards"],
-                    length_miles=tornado["length_miles"],
-                    fatalities=tornado["fatalities"],
-                    injuries=tornado["injuries"],
-                )
-            
-            reports.append(StormReport(
-                event_type=StormEventType.TORNADO,
-                latitude=tornado["start_lat"],
-                longitude=tornado["start_lon"],
-                timestamp=tornado["timestamp"],
-                magnitude=None,  # Tornadoes use EF rating, not wind speed
-                magnitude_unit="ef_scale",
-                description=tornado["description"],
-                source="NWS Damage Survey",
-                location_name=tornado["name"].split()[0],
-                state="NC",
-                tornado_path=path,
-            ))
-        
-        # Add thunderstorm wind reports
-        if event_types is None or "thunderstorm_wind" in [t.lower() for t in event_types]:
-            for wind in high_wind_reports:
-                if not (lat_min <= wind["lat"] <= lat_max and lon_min <= wind["lon"] <= lon_max):
-                    continue
-                
-                reports.append(StormReport(
-                    event_type=StormEventType.THUNDERSTORM_WIND,
-                    latitude=wind["lat"],
-                    longitude=wind["lon"],
-                    timestamp=wind["timestamp"],
-                    magnitude=wind["magnitude"],
-                    magnitude_unit="mph",
-                    description=wind["description"],
-                    source="Trained Spotter",
-                    location_name=wind["location"],
-                    state="NC",
-                ))
-        
-        # Filter by event types
-        if event_types:
-            type_filter = [t.lower() for t in event_types]
-            reports = [r for r in reports if r.event_type.lower() in type_filter]
-        
-        return SevereWeatherResponse(
-            reports=reports,
-            time_range=TimeRange.from_dates(start_date, end_date),
-            bounds={"lat_min": lat_min, "lat_max": lat_max, "lon_min": lon_min, "lon_max": lon_max},
-        )
 
     def test_connection(self) -> bool:
         """
@@ -995,10 +793,6 @@ class WeatherClient:
         Raises:
             AuthenticationError: If API key is invalid
         """
-        if self.demo_mode:
-            logger.info("Demo mode - skipping connection test")
-            return True
-        
         try:
             # Make a simple request to test connectivity
             self.get_historical_wind(

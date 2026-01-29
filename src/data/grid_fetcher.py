@@ -216,7 +216,7 @@ def fetch_grid_data(
     
     # Create client if not provided
     if client is None:
-        client = WeatherClient(demo_mode=True)  # Default to demo mode
+        client = WeatherClient()
     
     # Generate grid points
     points = create_grid_points(bounds, resolution)
@@ -232,36 +232,20 @@ def fetch_grid_data(
     results: List[GridPointData] = []
     completed = 0
     
-    # Use thread pool for parallel fetching
-    # Note: For demo mode, we use single thread to ensure spatial coherence
-    if client.demo_mode:
-        # Sequential for demo mode to allow spatial coherence
-        for lat, lon in points:
-            point_data = fetch_point_data(client, lat, lon, start_date, end_date)
+    # Use thread pool for parallel fetching (with rate limiting in client)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_point = {
+            executor.submit(fetch_point_data, client, lat, lon, start_date, end_date): (lat, lon)
+            for lat, lon in points
+        }
+        
+        for future in as_completed(future_to_point):
+            point_data = future.result()
             results.append(point_data)
             completed += 1
             
             if progress_callback:
                 progress_callback(completed, total_points)
-            
-            # Small delay to prevent overwhelming
-            if completed % 10 == 0:
-                logger.debug(f"Progress: {completed}/{total_points}")
-    else:
-        # Parallel for real API (with rate limiting in client)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_point = {
-                executor.submit(fetch_point_data, client, lat, lon, start_date, end_date): (lat, lon)
-                for lat, lon in points
-            }
-            
-            for future in as_completed(future_to_point):
-                point_data = future.result()
-                results.append(point_data)
-                completed += 1
-                
-                if progress_callback:
-                    progress_callback(completed, total_points)
     
     # Create GridData object
     # Use date range string for target_date field
@@ -277,7 +261,7 @@ def fetch_grid_data(
         points=results,
         fetch_timestamp=datetime.now(),
         units="mph",
-        source="demo_data" if client.demo_mode else "api",
+        source="weather_company",
     )
     
     # Cache the results
