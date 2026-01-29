@@ -423,4 +423,4 @@ python -m src.cli --resolution 0.1
 - Run `python -m src.cli --help` for complete CLI reference
 
 
-conda run -n wind_simulation python -m src.cli --start-date 2024-01-08 --end-date 2024-01-09 --region north_carolina --resolution 0.25 --format png
+conda run -n wind_simulation python -m src.cli --start-date 2024-01-08 --end-date 2024-01-09 --region outer_banks --resolution 0.025 --format png --no-max-marker

@@ -79,7 +79,7 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 ### 3.1 Core Features (Implemented)
 - **Command-Line Interface**: Full argparse CLI for scripted usage (`python -m src.cli`)
 - **Geographic Grid Fetching**: Fetch wind data across a grid of lat/lon coordinates (up to 0.01° resolution, though 0.025° is recommended for performance)
-- **Severe Weather Integration**: Local Storm Reports (LSR) API for tornado and thunderstorm wind data
+- **NOAA Storm Events Integration**: Historical severe weather data from NOAA Storm Events Database (automatic download and caching)
 - **Storm Wind Augmentation**: Combine grid and storm wind data using "max wins" logic (highest value preserved, never summed)
 - **Tornado Wind Estimation**: EF rating to wind speed mapping (EF0: 75 mph, EF1: 98 mph, etc.)
 - **Static Heatmap (PNG)**: Cartopy-based geographic heatmap with basemaps and TIGER state boundaries
@@ -88,8 +88,7 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 - **Semi-Transparent Overlay**: Configurable alpha for heatmap over basemap
 - **TIGER Shapefiles**: Accurate state boundaries from Census Bureau data (loaded via geopandas)
 - **CSV Export**: Export coordinates and peak wind speeds for external analysis
-- **Demo Mode**: Test the application without an API key using synthetic data (includes Jan 8-9, 2024 NC storm event)
-- **Smart Caching**: File-based caching to minimize API calls
+- **Smart Caching**: File-based caching to minimize API calls and NOAA downloads
 
 ### 3.2 CLI Flags Reference
 | Flag | Default | Description |
@@ -99,7 +98,6 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 | `--region` | nc | Preset region (nc, nc_coast, etc.) |
 | `--resolution` | 0.05 | Grid resolution in degrees |
 | `--format` | all | Output format (png, html, csv, all) |
-| `--demo` | False | Use synthetic demo data |
 | `--verbose` | False | Enable debug logging |
 | `--show-storm-markers` | False | Display storm markers and tornado paths on map |
 | `--no-augment-storm-winds` | False | Disable storm wind augmentation (only use grid data) |
@@ -128,8 +126,9 @@ HTTP 5xx: Server Error - retry with backoff, then fail gracefully
 - **Max-Wins Data Fusion**: When combining grid and storm data, keep only the highest wind value per location (never sum)
 
 ### 3.5 Severe Weather Data Rules
-- **Local Storm Reports (LSR)**: Fetch from Weather Company Severe Weather API
-- **Supported Event Types**: tornado, thunderstorm_wind, hail, high_wind, flash_flood, wildfire
+- **NOAA Storm Events**: Fetch from NOAA Storm Events Database (https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/)
+- **Supported Event Types**: Tornado, Thunderstorm Wind, High Wind, Hail, Flash Flood
+- **Data Delay**: NOAA data has approximately 120-day publication delay
 - **EF Rating Wind Mapping**: EF0=75mph, EF1=98mph, EF2=123mph, EF3=150mph, EF4=183mph, EF5=220mph
 - **Tornado Path Points**: Add wind estimates at both touchdown and liftoff locations
 - **Grid Augmentation**: Snap storm observations to nearest grid cell, take maximum value
@@ -154,7 +153,7 @@ Every run should produce:
 # Bounds: (33.8, -84.3) to (36.6, -75.4)
 # Valid Points: 444/444
 # Units: mph
-# Source: demo_data
+# Source: weather_company
 #
 latitude,longitude,peak_wind_speed,avg_wind_speed,peak_gust,peak_direction,observation_count
 35.55,-75.50,25.3,18.2,32.1,225,72
@@ -190,7 +189,8 @@ Wind_Simulation/
 │   ├── api/
 │   │   ├── __init__.py
 │   │   ├── cache.py             # API response caching
-│   │   └── weather_client.py    # Weather + Severe Weather APIs
+│   │   ├── weather_client.py    # Weather Company API client
+│   │   └── noaa_client.py       # NOAA Storm Events client
 │   ├── data/
 │   │   ├── __init__.py
 │   │   ├── models.py            # Pydantic models (wind + storm data)
@@ -202,7 +202,8 @@ Wind_Simulation/
 │       ├── geo_heatmap.py       # Cartopy heatmap + storm overlays + CSV
 │       └── styles.py
 ├── data/
-│   ├── cache/                   # Cached API responses
+│   ├── cache/                   # Cached Weather API responses
+│   ├── noaa_cache/              # Cached NOAA Storm Events files
 │   ├── shapefiles/              # Cached TIGER shapefiles
 │   └── exports/
 ├── output/
@@ -226,7 +227,6 @@ Wind_Simulation/
 ### 6.1 Test Requirements
 - **Unit Tests**: For all data processing functions
 - **Integration Tests**: For API client (with mocked responses)
-- **Demo Mode Tests**: Use synthetic data for automated testing
 
 ### 6.2 Test Data
 - Use fixtures with known wind data values

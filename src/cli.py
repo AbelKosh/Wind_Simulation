@@ -8,7 +8,7 @@ from Weather Company API data.
 Usage:
     python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09
     python -m src.cli --lat-min 35.0 --lat-max 36.5 --lon-min -80 --lon-max -75 --resolution 0.1
-    python -m src.cli --demo --format all
+    python -m src.cli --format all
 """
 
 import argparse
@@ -62,20 +62,20 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate heatmap for North Carolina with demo data
-  python -m src.cli --demo
+  # Generate heatmap for North Carolina
+  python -m src.cli
 
   # Custom date range
-  python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09 --demo
+  python -m src.cli --start-date 2024-01-07 --end-date 2024-01-09
 
   # Custom geographic bounds
-  python -m src.cli --lat-min 35.0 --lat-max 36.5 --lon-min -80 --lon-max -75 --demo
+  python -m src.cli --lat-min 35.0 --lat-max 36.5 --lon-min -80 --lon-max -75
 
   # High resolution for detailed analysis
-  python -m src.cli --resolution 0.05 --demo
+  python -m src.cli --resolution 0.05
 
   # Output only CSV data
-  python -m src.cli --format csv --demo
+  python -m src.cli --format csv
         """
     )
     
