@@ -104,7 +104,6 @@ data/exports/**/*.csv
 output/*.png
 output/*.svg
 output/*.pdf
-output/**/*.png
 output/**/*.svg
 output/**/*.pdf
 !output/.gitkeep
